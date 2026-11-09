@@ -1,0 +1,1305 @@
+<!doctype html>
+<html lang="ru">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Трёхсторонний протокол распределения ключей</title>
+    <style>
+      * {
+        box-sizing: border-box;
+      }
+
+      :root {
+        /* === Палитра (ecdh.component.css) === */
+        --bg: #f4f6fa;
+        --ink: #1c2733;
+        --ink-soft: #44494e;
+        --muted: #6c757d;
+        --border: #c9d4e0;
+        --border-light: #e3e9f1;
+        --panel: #fff;
+        --shadow: 0 2px 10px rgba(28, 39, 51, 0.08);
+
+        --blue: #007bff;
+        --blue-bg: rgba(0, 123, 255, 0.07);
+        --green: #1bdb21;
+        --green-ok: #1e7e34;
+        --green-point: #1f9d55;
+        --green-bg: rgba(27, 219, 33, 0.12);
+        --green-bg-soft: rgba(27, 219, 33, 0.15);
+        --red: #dc3545;
+        --red-bg: rgba(220, 53, 69, 0.1);
+
+        --mono: Consolas, "Courier New", monospace;
+      }
+
+      body {
+        margin: 0;
+        font-family: "Segoe UI", Arial, sans-serif;
+        background: var(--bg);
+        color: var(--ink);
+        padding: clamp(12px, 3vw, 24px);
+      }
+
+      h1 {
+        font-size: clamp(16px, 4vw, 20px);
+        margin: 0 0 4px;
+      }
+
+      h2 {
+        font-size: clamp(15px, 3vw, 18px);
+        margin: 12px 0 12px;
+      }
+
+      h3 {
+        font-size: clamp(13px, 2.5vw, 15px);
+        margin: 14px 0 6px;
+      }
+
+      .subtitle {
+        color: var(--muted);
+        font-size: clamp(12px, 2.5vw, 14px);
+        margin: 8px 0 12px;
+      }
+
+      .panel {
+        background: var(--panel);
+        border-radius: 12px;
+        padding: clamp(14px, 3vw, 20px) clamp(12px, 3vw, 24px);
+        box-shadow: var(--shadow);
+        max-width: 1180px;
+        margin: 0 auto 16px;
+      }
+
+      /* === Сцена === */
+      .scene-wrap {
+        position: relative;
+      }
+
+      .stage {
+        position: relative;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: clamp(90px, 15vw, 170px);
+        min-height: 480px;
+        padding: 8px 4px 4px;
+      }
+
+      .stage svg.wires {
+        position: absolute;
+        inset: 0;
+        width: 100%;
+        height: 100%;
+        pointer-events: none;
+        overflow: visible;
+      }
+
+      .bottom-row {
+        display: flex;
+        justify-content: space-between;
+        align-items: flex-start;
+        width: 100%;
+        max-width: 900px;
+        gap: clamp(60px, 14vw, 220px);
+      }
+
+      /* === Карточки === */
+      .node {
+        position: relative;
+        z-index: 2;
+        background: #fff;
+        border: 2px solid var(--border);
+        border-radius: 12px;
+        padding: 10px 14px;
+        width: max-content;
+        max-width: min(100%, 320px);
+        box-shadow: var(--shadow);
+        transition:
+          border-color 0.3s,
+          box-shadow 0.3s;
+      }
+
+      .node .name {
+        font-weight: 700;
+        font-size: clamp(14px, 3vw, 17px);
+      }
+
+      .node .role {
+        color: var(--muted);
+        font-size: clamp(11px, 2.2vw, 12px);
+      }
+
+      .node .desc {
+        font-size: clamp(11px, 2.2vw, 13px);
+        margin-top: 4px;
+        color: var(--ink-soft);
+      }
+
+      .node .knows {
+        margin-top: 6px;
+        display: flex;
+        flex-wrap: wrap;
+        gap: 4px;
+        align-items: center;
+      }
+
+      .node .knows .klabel {
+        font-size: 11px;
+        color: var(--muted);
+        margin-right: 2px;
+      }
+
+      .chip {
+        font-family: var(--mono);
+        font-size: clamp(10px, 2vw, 12px);
+        background: #eef2f7;
+        border: 1px solid var(--border-light);
+        border-radius: 10px;
+        padding: 1px 8px;
+        white-space: nowrap;
+      }
+
+      .chip.new {
+        background: var(--green-bg-soft);
+        border-color: rgba(27, 219, 33, 0.4);
+        color: var(--green-ok);
+        font-weight: 600;
+      }
+
+      .node .t-head {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+      }
+
+      .node.t {
+        border-color: var(--blue);
+      }
+
+      .node.a,
+      .node.b {
+        text-align: left;
+      }
+
+      /* Состояния карточек:
+         idle  — не участвует в текущем шаге: синяя обводка (и в сцене, и в подсхеме);
+         hot   — участник текущего шага: зелёная */
+      .node.idle {
+        border-color: var(--blue);
+        box-shadow: 0 0 0 3px var(--blue-bg);
+      }
+
+      .node.hot {
+        border-color: var(--green);
+        box-shadow:
+          0 0 0 4px var(--green-bg),
+          var(--shadow);
+      }
+
+      /* === Стрелки: пройденные — синие, текущая — зелёная === */
+      line.wire {
+        stroke: var(--border);
+        stroke-width: 2;
+      }
+
+      line.wire.future {
+        stroke: #cfd9e6;
+      }
+
+      line.wire.passed {
+        stroke: rgba(0, 123, 255, 0.55);
+        stroke-width: 2.5;
+      }
+
+      line.wire.current {
+        stroke: var(--green-point);
+        stroke-width: 3;
+        stroke-dasharray: 7 5;
+        animation: dashmove 1s linear infinite;
+      }
+
+      @keyframes dashmove {
+        to {
+          stroke-dashoffset: -12;
+        }
+      }
+
+      line.wire.future {
+        marker-end: url(#arrFuture);
+      }
+
+      line.wire.passed {
+        marker-end: url(#arrPassed);
+      }
+
+      line.wire.current {
+        marker-end: url(#arrCurrent);
+      }
+
+      .dot {
+        fill: #cfd9e6;
+      }
+
+      .dot.passed {
+        fill: rgba(0, 123, 255, 0.55);
+      }
+
+      .dot.current {
+        fill: var(--green-point);
+      }
+
+      /* === Плашки шагов на стрелках === */
+      .msg-tag {
+        position: absolute;
+        z-index: 3;
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        font-family: var(--mono);
+        font-size: clamp(10px, 1.9vw, 12px);
+        background: #fff;
+        border: 1px solid var(--border-light);
+        border-radius: 8px;
+        padding: 3px 9px;
+        box-shadow: var(--shadow);
+        white-space: nowrap;
+        pointer-events: none;
+        transform: translate(-50%, -50%);
+        transition:
+          border-color 0.25s,
+          box-shadow 0.25s;
+      }
+
+      .msg-tag .num {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        min-width: 17px;
+        height: 17px;
+        border-radius: 50%;
+        background: var(--blue);
+        color: #fff;
+        font-size: 10px;
+        font-weight: 600;
+        padding: 0 3px;
+      }
+
+      .msg-tag.current {
+        border-color: var(--green-point);
+        box-shadow: 0 0 0 3px var(--green-bg);
+      }
+
+      .msg-tag.current .num {
+        background: var(--green-point);
+      }
+
+      .msg-tag.passed {
+        border-color: rgba(0, 123, 255, 0.4);
+      }
+
+      .msg-tag.passed .num {
+        background: rgba(0, 123, 255, 0.55);
+      }
+
+      /* === Легенда === */
+      .legend {
+        display: flex;
+        gap: 16px;
+        flex-wrap: wrap;
+        margin-top: 12px;
+        font-size: 12px;
+        color: var(--muted);
+      }
+
+      .legend span {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+      }
+
+      .legend i {
+        width: 22px;
+        height: 0;
+        border-top: 2.5px solid;
+        display: inline-block;
+      }
+
+      .legend i.l-future {
+        border-color: #cfd9e6;
+      }
+
+      .legend i.l-passed {
+        border-color: rgba(0, 123, 255, 0.55);
+      }
+
+      .legend i.l-current {
+        border-color: var(--green-point);
+      }
+
+      /* === Роли === */
+      .roles {
+        list-style: none;
+        margin: 0;
+        padding: 0;
+      }
+
+      .roles li {
+        padding: 4px 0;
+        font-size: clamp(12px, 2.4vw, 14px);
+        color: var(--ink-soft);
+      }
+
+      .roles li b {
+        color: var(--ink);
+      }
+
+      /* === Кнопки === */
+      .btn-group {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+        margin: 10px 0;
+      }
+
+      button {
+        padding: 8px clamp(12px, 2.5vw, 18px);
+        font-size: clamp(0.85rem, 2vw, 0.95rem);
+        border-radius: 6px;
+        cursor: pointer;
+        transition: all 0.3s ease;
+        margin: 0;
+      }
+
+      button.primary {
+        background-color: var(--blue);
+        border: none;
+        color: #fff;
+      }
+
+      button.primary:hover:not(:disabled) {
+        background-color: var(--green);
+        box-shadow: 0 5px 15px 0 rgba(27, 219, 33, 0.4);
+      }
+
+      button.secondary {
+        background-color: transparent;
+        color: var(--blue);
+        border: 1px solid var(--blue);
+      }
+
+      button.secondary:hover:not(:disabled) {
+        background-color: var(--green-bg-soft);
+        color: var(--green-point);
+        border-color: var(--green);
+        box-shadow: 0 5px 15px 0 rgba(27, 219, 33, 0.4);
+      }
+
+      button:disabled {
+        background-color: transparent;
+        color: var(--muted);
+        border-color: var(--muted);
+        cursor: not-allowed;
+        box-shadow: none;
+      }
+
+      .status {
+        font-size: clamp(12px, 2.4vw, 14px);
+        color: var(--muted);
+        margin: 8px 0;
+      }
+
+      /* === Подсхема шагов: строка без скролла, карточки сжимаются и переносятся === */
+      .steps-strip {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: stretch;
+        gap: 6px;
+      }
+
+      .strip-step {
+        flex: 1 1 160px;
+        min-width: 0;
+        background: #f0f5fc;
+        /* синяя карточка: не участвует в текущем шаге */
+        border: 1.5px solid var(--blue);
+        border-radius: 10px;
+        padding: 8px 10px;
+        display: flex;
+        flex-direction: column;
+        gap: 4px;
+        transition:
+          border-color 0.25s,
+          box-shadow 0.25s,
+          background 0.25s;
+      }
+
+      .strip-step .ss-head {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+      }
+
+      .strip-step .num {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        min-width: 18px;
+        height: 18px;
+        border-radius: 50%;
+        background: var(--blue);
+        color: #fff;
+        font-size: 10px;
+        font-weight: 600;
+        flex-shrink: 0;
+      }
+
+      .strip-step .route {
+        font-family: var(--mono);
+        font-size: clamp(11px, 2vw, 12px);
+        color: var(--ink-soft);
+        white-space: nowrap;
+      }
+
+      .strip-step .ss-msg {
+        font-family: var(--mono);
+        font-size: clamp(10.5px, 2vw, 12px);
+        word-break: break-word;
+      }
+
+      .strip-step .ss-note {
+        font-size: clamp(10px, 1.9vw, 11.5px);
+        color: var(--muted);
+        line-height: 1.35;
+      }
+
+      /* участник текущего шага — зелёная */
+      .strip-step.current {
+        border-color: var(--green-point);
+        background: var(--green-bg-soft);
+        box-shadow: 0 0 0 3px var(--green-bg);
+      }
+
+      .strip-step.current .num {
+        background: var(--green-point);
+      }
+
+      .strip-step.current .ss-note {
+        color: var(--ink-soft);
+      }
+
+      /* стрелка-переход между карточками подсхемы */
+      .strip-arrow {
+        flex: 0 0 auto;
+        align-self: center;
+        width: 22px;
+        height: 2px;
+        background: var(--border);
+        position: relative;
+      }
+
+      .strip-arrow::after {
+        content: "";
+        position: absolute;
+        right: -1px;
+        top: 50%;
+        transform: translateY(-50%);
+        border-left: 7px solid var(--border);
+        border-top: 5px solid transparent;
+        border-bottom: 5px solid transparent;
+      }
+
+      .strip-arrow.passed {
+        background: rgba(0, 123, 255, 0.55);
+      }
+
+      .strip-arrow.passed::after {
+        border-left-color: rgba(0, 123, 255, 0.55);
+      }
+
+      /* === Таблица трассировки — светлая, на всю ширину, с переносом === */
+      .table-scroll {
+        width: 100%;
+        overflow-x: auto;
+        -webkit-overflow-scrolling: touch;
+      }
+
+      .blocks-table {
+        border-collapse: collapse;
+        margin: 8px 0;
+        width: 100%;
+        min-width: 620px;
+      }
+
+      .blocks-table td,
+      .blocks-table th {
+        border: 1px solid var(--border-light);
+        padding: 6px clamp(6px, 1.5vw, 10px);
+        text-align: center;
+        font-size: clamp(11px, 2.3vw, 13px);
+        font-variant-numeric: tabular-nums;
+        background: #fbfcfe;
+        vertical-align: middle;
+      }
+
+      .blocks-table th {
+        background: #f3f6fa;
+        color: var(--ink-soft);
+        font-weight: 600;
+        white-space: nowrap;
+      }
+
+      .blocks-table td.idx {
+        width: 44px;
+        white-space: nowrap;
+      }
+
+      .blocks-table td.party {
+        white-space: nowrap;
+        font-weight: 600;
+        color: var(--ink);
+      }
+
+      .blocks-table td.action {
+        font-family: var(--mono);
+        text-align: left;
+        white-space: normal;
+        word-break: break-word;
+        min-width: 200px;
+      }
+
+      .blocks-table th.action-h,
+      .blocks-table th.cmt-h {
+        text-align: left;
+      }
+
+      .blocks-table td.cmt {
+        text-align: left;
+        white-space: normal;
+        color: var(--ink-soft);
+      }
+
+      .blocks-table tr.public td {
+        background: #f0f5fc;
+      }
+
+      .blocks-table tr.key-equal td {
+        background: #edfaf0;
+        font-weight: 600;
+      }
+
+      /* === Итог === */
+      .verify {
+        border-radius: 8px;
+        padding: 12px 14px;
+        margin-top: 16px;
+        word-break: break-word;
+        font-size: clamp(13px, 2.6vw, 15px);
+      }
+
+      .verify.ok {
+        color: var(--green-ok);
+        background-color: var(--green-bg);
+        border: 1px solid rgba(27, 219, 33, 0.4);
+      }
+
+      .verify .warn {
+        color: var(--ink-soft);
+        background: #fff8e6;
+        border: 1px solid #f0e0b0;
+        border-radius: 8px;
+        padding: 10px 12px;
+        margin-top: 10px;
+      }
+
+      .badge {
+        display: inline-block;
+        margin-left: 8px;
+        padding: 2px 10px;
+        border-radius: 10px;
+        font-size: 12px;
+        font-weight: 600;
+        color: var(--green-ok);
+        background-color: var(--green-bg-soft);
+      }
+    </style>
+  </head>
+
+  <body>
+    <!-- Шапка + схема протокола: одна панель -->
+    <div class="panel">
+      <h1>1 Вопрос. Трёхсторонний протокол распределения ключей</h1>
+      <p class="subtitle">
+        A — инициатор &nbsp;·&nbsp; B — ответчик &nbsp;·&nbsp; T — доверенный
+        центр (KDC)
+      </p>
+
+      <h2>Схема протокола</h2>
+      <div class="scene-wrap">
+        <div class="stage" id="stage">
+          <svg class="wires" id="wires" aria-hidden="true"></svg>
+
+          <div class="node t" id="node-t">
+            <div class="t-head">
+              <span class="name">T</span><span class="role">KDC</span>
+            </div>
+            <div class="desc">
+              Доверенный центр: генерирует сеансовые ключи, хранит мастер-ключи
+              всех (Раздаёт по запросу)
+            </div>
+            <div class="knows">
+              <span class="klabel">знает:</span><span class="chip">K_AT</span
+              ><span class="chip">K_BT</span><span class="chip">K_CT</span>
+            </div>
+          </div>
+
+          <div class="bottom-row">
+            <div class="node a" id="node-a">
+              <div class="t-head">
+                <span class="name">A</span><span class="role">инициатор</span>
+              </div>
+              <div class="desc">
+                Хочет защитить связь с B (Запрашивает у центра сеансовый ключ
+                для связи с B)
+              </div>
+              <div class="knows" id="knows-a">
+                <span class="klabel">знает:</span><span class="chip">K_AT</span>
+              </div>
+            </div>
+            <div class="node b" id="node-b">
+              <div class="t-head">
+                <span class="name">B</span><span class="role">ответчик</span>
+              </div>
+              <div class="desc">
+                Принимает соединение от A (Пересчёт ключ через билет от A)
+              </div>
+              <div class="knows" id="knows-b">
+                <span class="klabel">знает:</span><span class="chip">K_BT</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="legend">
+          <span><i class="l-future"></i> будущий шаг</span>
+          <span><i class="l-passed"></i> пройден</span>
+          <span><i class="l-current"></i> текущий шаг</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Управление + подсхема шагов: одна панель -->
+    <div class="panel">
+      <h2>Шаг протокола</h2>
+      <div class="btn-group">
+        <button class="primary" id="btn-next">▶ Следующий шаг</button>
+        <button class="secondary" id="btn-reset">⟲ Сброс</button>
+        <button class="secondary" id="btn-all">Все шаги</button>
+      </div>
+      <p class="status" id="status">Шаг 0 из 5 — нажмите «Следующий шаг»</p>
+
+      <h3>Подсхема шагов</h3>
+      <div class="steps-strip" id="strip"></div>
+    </div>
+
+    <!-- Роли -->
+    <div class="panel">
+      <h2>Роли участников</h2>
+      <ul class="roles">
+        <li>
+          A (инициатор) — запрашивает у центра сеансовый ключ для связи с B
+        </li>
+        <li>B (ответчик) — получает ключ через билет от A</li>
+        <li>
+          T (KDC) — доверенный посредник: генерирует ключ и раздаёт его паре
+          через мастер-ключи
+        </li>
+      </ul>
+
+      <h2>Трассировка сообщений</h2>
+      <div class="table-scroll">
+        <table class="blocks-table">
+          <thead>
+            <tr>
+              <th>Шаг</th>
+              <th>Отправитель</th>
+              <th>Получатель</th>
+              <th class="action-h">Сообщение</th>
+              <th class="cmt-h">Комментарий</th>
+            </tr>
+          </thead>
+          <tbody id="trace"></tbody>
+        </table>
+      </div>
+
+      <div class="verify ok" id="final" hidden>
+        Итог: между A и B установлен общий секретный сеансовый ключ
+        <code>K_AB</code>, известный только им и центру T. Обе стороны
+        подтвердили свежесть ключа и подлинность друг друга. Повторив протокол
+        для пар (A, C) и (B, C), центр обеспечивает ключами все три пары
+        участников.
+        <span class="badge">K_AB установлен ✔</span>
+        <div class="warn">
+          Слабости схемы:
+          <ul>
+            <li>
+              T — единая точка доверия и отказа; компрометация мастер-ключа
+              участника раскрывает все его сессии.
+            </li>
+            <li>
+              B не может проверить свежесть билета — <b>атака Деннинг–Сакко</b>:
+              если противник когда-либо узнал старый сеансовый ключ K′, он
+              повторно отправляет B сохранённый билет
+              <code>E(K_BT; K′, A)</code> и корректно отвечает на шаге 5,
+              выдавая себя за A.
+            </li>
+          </ul>
+          Защита: метка времени и срок действия в билете (Kerberos) либо
+          предварительный обмен, где нонс B через A попадает в билет
+          (Нидхэм–Шрёдер, 1987).
+        </div>
+      </div>
+
+    <script>
+      "use strict";
+      (function () {
+        /* ============ Данные шагов ============ */
+        var STEPS = [
+          {
+            from: "a",
+            to: "t",
+            arrow: "AT",
+            msg: "ID_A, ID_B, n_A",
+            tag: "ID_A, ID_B, n_A",
+            note: "A просит центр выдать сеансовый ключ для связи с B. n_A — одноразовый номер против повтора.",
+            trace: [
+              "1",
+              "A",
+              "T",
+              "ID_A, ID_B, n_A",
+              "запрос ключа, открытый канал",
+            ],
+            knows: null,
+            tagPos: 0.45,
+            side: -1,
+          },
+
+          {
+            from: "t",
+            to: "a",
+            arrow: "TA",
+            msg: "E(K_AT; n_A, B, K_AB, E(K_BT; K_AB, A))",
+            tag: "K_AB ‖ билет для B",
+            note: "T генерирует K_AB. Ответ закрыт ключом K_AT: по n_A A убеждается в свежести, по B — в адресате; вложенный билет E(K_BT; K_AB, A) доступен только B.",
+            trace: [
+              "2",
+              "T",
+              "A",
+              "E(K_AT; n_A, B, K_AB, E(K_BT; K_AB, A))",
+              "ответ центра + билет для B",
+              "public",
+            ],
+            knows: { a: "K_AB" },
+            tagPos: 0.55,
+            side: -1,
+          },
+
+          {
+            from: "a",
+            to: "b",
+            arrow: "AB",
+            msg: "E(K_BT; K_AB, A)",
+            tag: "E(K_BT; K_AB, A)",
+            note: "A пересылает B билет. B расшифровывает его своим K_BT и узнаёт сеансовый ключ и имя партнёра.",
+            trace: ["3", "A", "B", "E(K_BT; K_AB, A)", "билет для B", "public"],
+            knows: { b: "K_AB" },
+            tagPos: 0.28,
+            side: -1,
+          },
+
+          {
+            from: "b",
+            to: "a",
+            arrow: "BA",
+            msg: "E(K_AB; n_B)",
+            tag: "E(K_AB; n_B)",
+            note: "B шлёт свежий nonce n_B под сеансовым ключом — проверка A.",
+            trace: [
+              "4",
+              "B",
+              "A",
+              "E(K_AB; n_B)",
+              "проверка A владельцем K_AB",
+              "public",
+            ],
+            knows: null,
+            tagPos: 0.5,
+            side: -1,
+          },
+
+          {
+            from: "a",
+            to: "b",
+            arrow: "AB",
+            msg: "E(K_AB; n_B − 1)",
+            tag: "E(K_AB; n_B − 1)",
+            note: "A отвечает на nonce под тем же ключом — проверка B. Ключ установлен.",
+            trace: [
+              "5",
+              "A",
+              "B",
+              "E(K_AB; n_B − 1)",
+              "проверка B, K_AB установлен",
+              "key-equal",
+            ],
+            knows: null,
+            tagPos: 0.74,
+            side: -1,
+          },
+        ];
+
+        /* ============ Каналы и стрелки: две стрелки на поток ============ */
+        var CHANNELS = [
+          { id: "AT", from: "a", to: "t", horizontal: false },
+          { id: "AB", from: "a", to: "b", horizontal: true },
+        ];
+
+        var ARROWS = [
+          { id: "AT", ch: "AT", dir: 1, off: -16 },
+          { id: "TA", ch: "AT", dir: -1, off: 16 },
+          { id: "AB", ch: "AB", dir: 1, off: -12 },
+          { id: "BA", ch: "AB", dir: -1, off: 12 },
+        ];
+
+        /* Насколько продлить стрелку ВНУТРЬ карточки (px): линия уходит под карточку,
+           поэтому визуально стрелка начинается ровно у края отправителя
+           и наконечник упирается в край получателя. */
+        var EXTEND = 0;
+
+        /* ============ Состояние ============ */
+        var idx = 0; // сколько шагов выполнено
+        var labels = []; // [{el, stepIndex, arrowId, x, y}]
+
+        var $ = function (id) {
+          return document.getElementById(id);
+        };
+        var stage = $("stage"),
+          wires = $("wires"),
+          traceBody = $("trace"),
+          strip = $("strip");
+        var status = $("status"),
+          final = $("final"),
+          btnNext = $("btn-next"),
+          btnAll = $("btn-all");
+
+        /* ============ SVG: маркеры и линии ============ */
+        wires.innerHTML =
+          "<defs>" +
+          ["Future", "Passed", "Current"]
+            .map(function (n) {
+              return (
+                '<marker id="arr' +
+                n +
+                '" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto">' +
+                '<path d="M0,0 L10,5 L0,10 z" class="m-' +
+                n.toLowerCase() +
+                '"/></marker>'
+              );
+            })
+            .join("") +
+          "</defs>";
+
+        var style = document.createElement("style");
+        style.textContent =
+          ".m-future{fill:#cfd9e6}.m-passed{fill:rgba(0,123,255,.55)}.m-current{fill:#1f9d55}";
+        document.head.appendChild(style);
+
+        ARROWS.forEach(function (a) {
+          var ln = document.createElementNS(
+            "http://www.w3.org/2000/svg",
+            "line",
+          );
+          ln.setAttribute("class", "wire future");
+          ln.setAttribute("data-arrow", a.id);
+          wires.appendChild(ln);
+          a.line = ln;
+
+          var dot = document.createElementNS(
+            "http://www.w3.org/2000/svg",
+            "circle",
+          );
+          dot.setAttribute("r", "3.5");
+          dot.setAttribute("class", "dot");
+          wires.appendChild(dot);
+          a.dot = dot;
+        });
+
+        /* ============ Подсхема шагов ============ */
+        var stripCells = [];
+        (function buildStrip() {
+          STEPS.forEach(function (s, i) {
+            var card = document.createElement("div");
+            card.className = "strip-step";
+            card.innerHTML =
+              '<div class="ss-head"><span class="num">' +
+              (i + 1) +
+              "</span>" +
+              '<span class="route">' +
+              s.from.toUpperCase() +
+              " → " +
+              s.to.toUpperCase() +
+              "</span></div>" +
+              '<div class="ss-msg">' +
+              s.msg +
+              "</div>" +
+              '<div class="ss-note">' +
+              s.note +
+              "</div>";
+            strip.appendChild(card);
+
+            if (i < STEPS.length - 1) {
+              var ar = document.createElement("div");
+              ar.className = "strip-arrow";
+              strip.appendChild(ar);
+              stripCells.push({ card: card, arrow: ar });
+            } else {
+              stripCells.push({ card: card, arrow: null });
+            }
+          });
+        })();
+
+        /* ============ Геометрия ============ */
+        function rectOf(el) {
+          var r = el.getBoundingClientRect(),
+            s = stage.getBoundingClientRect();
+          return {
+            x: r.left - s.left,
+            y: r.top - s.top,
+            w: r.width,
+            h: r.height,
+            cx: r.left - s.left + r.width / 2,
+            cy: r.top - s.top + r.height / 2,
+          };
+        }
+        function nodeEl(id) {
+          return $(id === "a" ? "node-a" : id === "b" ? "node-b" : "node-t");
+        }
+        function arrowById(id) {
+          var found = null;
+          ARROWS.forEach(function (a) {
+            if (a.id === id) found = a;
+          });
+          return found;
+        }
+
+        /* Честное пересечение прямой p(t) = o + u*t с прямоугольником (slab-метод):
+           возвращает реальный интервал t, на котором прямая внутри прямоугольника. */
+        function lineRectT(o, u, r) {
+          var tNear = -Infinity,
+            tFar = Infinity;
+          if (u.x !== 0) {
+            var t1 = (r.x - o.x) / u.x,
+              t2 = (r.x + r.w - o.x) / u.x;
+            tNear = Math.max(tNear, Math.min(t1, t2));
+            tFar = Math.min(tFar, Math.max(t1, t2));
+          }
+          if (u.y !== 0) {
+            var t3 = (r.y - o.y) / u.y,
+              t4 = (r.y + r.h - o.y) / u.y;
+            tNear = Math.max(tNear, Math.min(t3, t4));
+            tFar = Math.min(tFar, Math.max(t3, t4));
+          }
+          if (tNear > tFar) return null; // прямая проходит мимо прямоугольника
+          return { min: tNear, max: tFar };
+        }
+
+        function layout() {
+          var R = {
+            a: rectOf($("node-a")),
+            b: rectOf($("node-b")),
+            t: rectOf($("node-t")),
+          };
+
+          CHANNELS.forEach(function (ch) {
+            var R1 = R[ch.from],
+              R2 = R[ch.to];
+
+            /* Направление канала — через центры карточек */
+            var dx = R2.cx - R1.cx,
+              dy = R2.cy - R1.cy;
+            var len = Math.hypot(dx, dy) || 1;
+            var u = { x: dx / len, y: dy / len };
+            var n = { x: -u.y, y: u.x }; // нормаль для параллельного сдвига
+
+            ARROWS.filter(function (a) {
+              return a.ch === ch.id;
+            }).forEach(function (a) {
+              /* Своя смещённая прямая для каждой стрелки:
+                 проходит через центр отправителя, сдвинутый по нормали на off.
+                 Сдвиг 16 px меньше половины высоты карточки, поэтому точка
+                 остаётся внутри прямоугольника — пересечение всегда на границе. */
+              var o = { x: R1.cx + n.x * a.off, y: R1.cy + n.y * a.off };
+
+              var s = lineRectT(o, u, R1); // выход из карточки отправителя
+              var d = lineRectT(o, u, R2); // вход в карточку получателя
+              if (!s || !d) return;
+
+              var pExit = {
+                x: o.x + u.x * (s.max - EXTEND),
+                y: o.y + u.y * (s.max - EXTEND),
+              }; // чуть внутрь карточки отправителя
+              var pEntry = {
+                x: o.x + u.x * (d.min + EXTEND),
+                y: o.y + u.y * (d.min + EXTEND),
+              }; // чуть внутрь карточки получателя
+
+              a.p1 = a.dir === 1 ? pExit : pEntry;
+              a.p2 = a.dir === 1 ? pEntry : pExit;
+
+              a.line.setAttribute("x1", a.p1.x);
+              a.line.setAttribute("y1", a.p1.y);
+              a.line.setAttribute("x2", a.p2.x);
+              a.line.setAttribute("y2", a.p2.y);
+              a.dot.setAttribute("cx", a.p1.x);
+              a.dot.setAttribute("cy", a.p1.y);
+            });
+          });
+
+          labels.forEach(placeLabel);
+        }
+
+        /* ============ Позиция плашки на стрелке ============ */
+        function placeLabel(L) {
+          var a = arrowById(L.arrowId);
+          if (!a || !a.p1) return;
+          var step = STEPS[L.stepIndex];
+          var fx = a.p2.x - a.p1.x,
+            fy = a.p2.y - a.p1.y;
+          var len = Math.hypot(fx, fy) || 1;
+          var nx = -fy / len,
+            ny = fx / len;
+
+          var t = step.tagPos;
+          var gap = 18;
+
+          function posAt(tt, g) {
+            return {
+              x: a.p1.x + fx * tt + nx * g * step.side,
+              y: a.p1.y + fy * tt + ny * g * step.side,
+            };
+          }
+
+          var p = posAt(t, gap);
+          var guard = 0,
+            d = 0;
+          while (guard++ < 80) {
+            if (!collides(L, p.x, p.y)) break;
+            if (guard % 2 === 1) {
+              d += 0.08;
+              t = step.tagPos - d;
+            } else {
+              t = step.tagPos + d;
+            }
+            if (t < 0.1 || t > 0.9) {
+              gap += 10;
+              t = step.tagPos;
+              d = 0;
+            }
+            p = posAt(t, gap);
+          }
+
+          var sw = stage.clientWidth,
+            sh = stage.clientHeight;
+          var w = L.el.offsetWidth || 160;
+          p.x = Math.max(w / 2 + 4, Math.min(sw - w / 2 - 4, p.x));
+          p.y = Math.max(14, Math.min(sh - 14, p.y));
+          L.x = p.x;
+          L.y = p.y;
+          L.el.style.left = p.x + "px";
+          L.el.style.top = p.y + "px";
+        }
+
+        function collides(L, x, y) {
+          var w = L.el.offsetWidth || 160,
+            h = L.el.offsetHeight || 26;
+          return labels.some(function (o) {
+            if (o === L || o.x === undefined) return false;
+            var ow = o.el.offsetWidth || 160,
+              oh = o.el.offsetHeight || 26;
+            return (
+              Math.abs(x - o.x) < (w + ow) / 2 + 8 &&
+              Math.abs(y - o.y) < (h + oh) / 2 + 6
+            );
+          });
+        }
+
+        /* ============ Рендер ============ */
+        /* Логика подсветки: участник текущего шага — зелёный (hot),
+           все остальные карточки — синяя обводка (idle). */
+        function setState(el, state) {
+          el.classList.remove(
+            "future",
+            "passed",
+            "current",
+            "hot",
+            "done",
+            "idle",
+          );
+          if (state) el.classList.add(state);
+        }
+
+        function render() {
+          var curIdx = idx - 1; // последний выполненный шаг; при idx = 0 подсветки нет
+          var partFrom = curIdx >= 0 ? STEPS[curIdx].from : null;
+          var partTo = curIdx >= 0 ? STEPS[curIdx].to : null;
+
+          ARROWS.forEach(function (a) {
+            var isCurrent = curIdx >= 0 && STEPS[curIdx].arrow === a.id;
+            var isUsed =
+              curIdx >= 0 &&
+              STEPS.some(function (s, i) {
+                return i < curIdx && s.arrow === a.id;
+              });
+            setState(
+              a.line,
+              isCurrent ? "current" : isUsed ? "passed" : "future",
+            );
+            a.dot.setAttribute(
+              "class",
+              "dot " + (isCurrent ? "current" : isUsed ? "passed" : ""),
+            );
+          });
+
+          /* карточки сцены: участник текущего шага — зелёный, остальные — синие */
+          ["t", "a", "b"].forEach(function (n) {
+            var isPart = curIdx >= 0 && (partFrom === n || partTo === n);
+            setState(nodeEl(n), isPart ? "hot" : "idle");
+          });
+
+          labels.forEach(function (L) {
+            L.el.className =
+              "msg-tag " + (L.stepIndex === curIdx ? "current" : "passed");
+          });
+
+          /* подсхема: карточка текущего шага — зелёная, остальные — синие */
+          stripCells.forEach(function (c, i) {
+            setState(c.card, i === curIdx ? "current" : "idle");
+            if (c.arrow)
+              c.arrow.className = "strip-arrow " + (i < curIdx ? "passed" : "");
+          });
+
+          btnNext.disabled = idx >= STEPS.length;
+          btnAll.disabled = idx >= STEPS.length;
+          status.textContent =
+            idx >= STEPS.length
+              ? "Все шаги выполнены — ключ K_AB установлен ✔"
+              : "Шаг " +
+                idx +
+                " из " +
+                STEPS.length +
+                (idx === 0 ? " — нажмите «Следующий шаг»" : "");
+          layout();
+        }
+
+        /* Маркеры оформления строки хранятся отдельно от данных ячеек */
+        var ROW_MARKS = { public: 1, "key-equal": 1 };
+
+        function addTraceRow(s) {
+          var tr = document.createElement("tr");
+          var mark = s.trace[5];
+          if (mark && ROW_MARKS[mark]) tr.className = mark; // только как класс, не как ячейка
+          var cells = s.trace.slice(0, 5); // ровно 5 колонок данных
+          var cls = ["idx", "party", "party", "action", "cmt"];
+          cells.forEach(function (c, k) {
+            var td = tr.insertCell();
+            td.textContent = c;
+            if (cls[k]) td.className = cls[k];
+          });
+          traceBody.appendChild(tr);
+        }
+
+        function addKnows(target, chip) {
+          var sp = document.createElement("span");
+          sp.className = "chip new";
+          sp.textContent = chip;
+          $(target).appendChild(sp);
+        }
+
+        function makeLabel(s, i) {
+          var el = document.createElement("div");
+          el.className = "msg-tag current";
+          el.innerHTML =
+            '<span class="num">' +
+            (i + 1) +
+            "</span><span>" +
+            s.tag +
+            "</span>";
+          stage.appendChild(el);
+          var L = {
+            el: el,
+            stepIndex: i,
+            arrowId: s.arrow,
+            x: undefined,
+            y: undefined,
+          };
+          labels.push(L);
+          return L;
+        }
+
+        function doStep() {
+          if (idx >= STEPS.length) return;
+          var s = STEPS[idx];
+          makeLabel(s, idx);
+          addTraceRow(s);
+          if (s.knows) {
+            if (s.knows.a) addKnows("knows-a", s.knows.a);
+            if (s.knows.b) addKnows("knows-b", s.knows.b);
+          }
+          idx++;
+          if (idx >= STEPS.length) final.hidden = false;
+          render();
+        }
+
+        /* ============ Сброс ============ */
+        function reset() {
+          idx = 0;
+          labels.forEach(function (L) {
+            if (L.el.parentNode) L.el.remove();
+          });
+          labels = [];
+          traceBody.innerHTML = "";
+          document
+            .querySelectorAll("#knows-a .chip.new, #knows-b .chip.new")
+            .forEach(function (c) {
+              c.remove();
+            });
+          final.hidden = true;
+          render();
+          requestAnimationFrame(layout);
+        }
+
+        btnNext.addEventListener("click", doStep);
+        btnAll.addEventListener("click", function () {
+          while (idx < STEPS.length) doStep();
+        });
+        $("btn-reset").addEventListener("click", reset);
+
+        /* ============ Пересчёт геометрии ============ */
+        if ("ResizeObserver" in window) {
+          var ro = new ResizeObserver(function () {
+            layout();
+          });
+          ro.observe(stage);
+          ["node-a", "node-b", "node-t"].forEach(function (id) {
+            ro.observe($(id));
+          });
+        }
+        window.addEventListener("resize", layout);
+        if (document.fonts && document.fonts.ready)
+          document.fonts.ready.then(layout);
+
+        render();
+      })();
+    </script>
+  </body>
+</html>

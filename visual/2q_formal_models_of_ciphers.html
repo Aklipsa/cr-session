@@ -1,0 +1,1393 @@
+<!doctype html>
+<html lang="ru">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Формальные модели шифров</title>
+    <style>
+      * {
+        box-sizing: border-box;
+      }
+
+      :root {
+        --bg: #f4f6fa;
+        --ink: #1c2733;
+        --ink-soft: #44494e;
+        --muted: #6c757d;
+        --border: #c9d4e0;
+        --border-light: #e3e9f1;
+        --panel: #fff;
+        --shadow: 0 2px 10px rgba(28, 39, 51, 0.08);
+        --blue: #007bff;
+        --blue-bg: rgba(0, 123, 255, 0.07);
+        --green: #1bdb21;
+        --green-ok: #1e7e34;
+        --green-point: #1f9d55;
+        --green-bg: rgba(27, 219, 33, 0.12);
+        --green-bg-soft: rgba(27, 219, 33, 0.15);
+        --red: #dc3545;
+        --red-bg: rgba(220, 53, 69, 0.1);
+        --mono: Consolas, "Courier New", monospace;
+      }
+
+      body {
+        margin: 0;
+        font-family: "Segoe UI", Arial, sans-serif;
+        background: var(--bg);
+        color: var(--ink);
+        padding: clamp(12px, 3vw, 24px);
+        font-size: 16px;
+      }
+      h1 {
+        font-size: clamp(16px, 4vw, 20px);
+        margin: 0 0 4px;
+      }
+      h2 {
+        font-size: clamp(15px, 3vw, 18px);
+        margin: 12px 0 12px;
+      }
+      h3 {
+        font-size: clamp(15px, 2.8vw, 17px);
+        margin: 14px 0 6px;
+      }
+
+      .subtitle {
+        color: var(--muted);
+        font-size: clamp(13px, 2.6vw, 15px);
+        margin: 0 0 16px;
+      }
+
+      .panel {
+        background: var(--panel);
+        border-radius: 12px;
+        padding: clamp(14px, 3vw, 20px) clamp(12px, 3vw, 24px);
+        box-shadow: var(--shadow);
+        max-width: 1180px;
+        margin: 0 auto 16px;
+      }
+
+      .steps-strip {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: stretch;
+        gap: 6px;
+      }
+
+      .strip-step {
+        flex: 1 1 170px;
+        min-width: 0;
+        background: #f0f5fc;
+        border: 1.5px solid var(--blue);
+        border-radius: 10px;
+        padding: 10px 12px;
+        display: flex;
+        flex-direction: column;
+        gap: 5px;
+        cursor: pointer;
+        transition:
+          border-color 0.25s,
+          box-shadow 0.25s,
+          background 0.25s;
+      }
+
+      .strip-step .ss-head {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+      }
+
+      .strip-step .num {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        min-width: 20px;
+        height: 20px;
+        border-radius: 50%;
+        background: var(--blue);
+        color: #fff;
+        font-size: 11px;
+        font-weight: 600;
+        flex-shrink: 0;
+      }
+
+      .strip-step .route {
+        font-family: var(--mono);
+        font-size: clamp(12px, 2.3vw, 13.5px);
+        color: var(--ink-soft);
+        white-space: nowrap;
+      }
+
+      .strip-step .ss-note {
+        font-size: clamp(11.5px, 2.2vw, 13px);
+        color: var(--muted);
+        line-height: 1.45;
+      }
+
+      .strip-step .tick {
+        margin-left: auto;
+        font-size: 11px;
+        color: var(--green-ok);
+        font-weight: 700;
+        visibility: hidden;
+      }
+
+      .strip-step.visited .tick {
+        visibility: visible;
+      }
+
+      .strip-step.current {
+        border-color: var(--green-point);
+        background: var(--green-bg-soft);
+        box-shadow: 0 0 0 3px var(--green-bg);
+      }
+
+      .strip-step.current .num {
+        background: var(--green-point);
+      }
+      .strip-step.current .ss-note {
+        color: var(--ink-soft);
+      }
+
+      .strip-step:hover {
+        border-color: var(--green-point);
+        box-shadow: 0 0 0 3px var(--green-bg);
+      }
+      .strip-step:active {
+        transform: translateY(1px);
+      }
+
+      .demo-title {
+        font-weight: 700;
+        font-size: clamp(15px, 3vw, 17px);
+        margin: 12px 0 4px;
+      }
+
+      .outline {
+        font-family: var(--mono);
+        font-size: clamp(13px, 2.4vw, 15px);
+        background: #fbfcfe;
+        border: 1px solid var(--border-light);
+        border-radius: 8px;
+        padding: 10px 12px;
+        margin: 8px 0;
+        word-break: break-word;
+        line-height: 1.6;
+      }
+
+      .outline code {
+        font-family: var(--mono);
+      }
+      .outline .lbl-b {
+        font-weight: 700;
+        color: var(--ink);
+      }
+      .ok-line {
+        color: var(--green-ok);
+        font-weight: 600;
+      }
+      .warn-line {
+        color: #8a6d3b;
+        font-weight: 600;
+      }
+
+      .ctl {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 6px;
+        align-items: center;
+        margin: 8px 0;
+      }
+
+      .ctl .lbl {
+        font-size: clamp(12px, 2.4vw, 14px);
+        color: var(--muted);
+        min-width: 160px;
+      }
+
+      .chipbtn {
+        font-family: var(--mono);
+        font-size: clamp(11.5px, 2.3vw, 13.5px);
+        background: #fff;
+        border: 1.5px solid var(--blue);
+        color: var(--blue);
+        border-radius: 10px;
+        padding: 5px 14px;
+        cursor: pointer;
+        transition: all 0.2s;
+        user-select: none;
+      }
+
+      .chipbtn.on {
+        background: var(--blue);
+        color: #fff;
+        font-weight: 600;
+      }
+      .chipbtn:hover:not(.on):not(:disabled) {
+        background: var(--blue-bg);
+        border-color: var(--green-point);
+        color: var(--green-point);
+      }
+      .chipbtn:disabled {
+        border-color: var(--muted);
+        color: var(--muted);
+        cursor: not-allowed;
+      }
+      .chipbtn:active:not(:disabled) {
+        transform: translateY(1px);
+      }
+      .chipbtn:focus-visible {
+        outline: 2px solid var(--blue);
+        outline-offset: 2px;
+      }
+
+      .inp {
+        font-family: var(--mono);
+        font-size: 14px;
+        padding: 7px 10px;
+        border: 1.5px solid var(--border);
+        border-radius: 6px;
+        width: min(320px, 100%);
+        outline: none;
+      }
+
+      .inp:focus {
+        border-color: var(--blue);
+        box-shadow: 0 0 0 3px var(--blue-bg);
+      }
+
+      .bars {
+        margin: 8px 0;
+        display: flex;
+        flex-direction: column;
+        gap: 4px;
+      }
+
+      .bar-row {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        font-size: clamp(11.5px, 2.3vw, 13.5px);
+      }
+
+      .bar-row .bl {
+        width: 130px;
+        font-family: var(--mono);
+        color: var(--ink-soft);
+        white-space: nowrap;
+      }
+
+      .bar-track {
+        flex: 1;
+        min-width: 60px;
+        background: #eef2f7;
+        border-radius: 7px;
+        height: 14px;
+        overflow: hidden;
+      }
+
+      .bar {
+        height: 100%;
+        background: var(--blue);
+        border-radius: 7px;
+        transition: width 0.4s;
+      }
+      .bar-row.hotbar .bar {
+        background: var(--green-point);
+      }
+
+      .bar-row .bv {
+        font-family: var(--mono);
+        color: var(--ink-soft);
+        min-width: 44px;
+        text-align: right;
+      }
+
+      .table-scroll {
+        width: 100%;
+        overflow-x: auto;
+        -webkit-overflow-scrolling: touch;
+      }
+
+      .blocks-table {
+        border-collapse: collapse;
+        margin: 8px 0;
+        width: 100%;
+        min-width: 620px;
+      }
+
+      .blocks-table td,
+      .blocks-table th {
+        border: 1px solid var(--border-light);
+        padding: 6px clamp(6px, 1.5vw, 10px);
+        text-align: center;
+        font-size: clamp(12px, 2.5vw, 14px);
+        font-variant-numeric: tabular-nums;
+        background: #fbfcfe;
+        vertical-align: middle;
+      }
+
+      .blocks-table th {
+        background: #f3f6fa;
+        color: var(--ink-soft);
+        font-weight: 600;
+        white-space: nowrap;
+      }
+
+      .blocks-table td.idx {
+        width: 44px;
+        white-space: nowrap;
+      }
+
+      .blocks-table td.party {
+        white-space: nowrap;
+        font-weight: 600;
+        color: var(--ink);
+      }
+
+      .blocks-table td.action {
+        font-family: var(--mono);
+        text-align: left;
+        white-space: normal;
+        word-break: break-word;
+        min-width: 180px;
+      }
+
+      .blocks-table th.action-h,
+      .blocks-table th.cmt-h {
+        text-align: left;
+      }
+
+      .blocks-table td.cmt {
+        text-align: left;
+        white-space: normal;
+        color: var(--ink-soft);
+      }
+
+      .blocks-table tr.public td {
+        background: #f0f5fc;
+      }
+      .blocks-table tr.key-equal td {
+        background: #edfaf0;
+        font-weight: 600;
+      }
+
+      .table-empty {
+        color: var(--muted);
+        font-size: clamp(13px, 2.6vw, 15px);
+        margin: 8px 0;
+      }
+
+      .btn-group {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+        margin: 10px 0;
+      }
+
+      button.big {
+        padding: 10px clamp(16px, 3vw, 22px);
+        font-size: clamp(0.95rem, 2.2vw, 1.05rem);
+        border-radius: 8px;
+        cursor: pointer;
+        transition: all 0.3s ease;
+        margin: 0;
+        border: none;
+      }
+
+      button.big.primary {
+        background-color: var(--blue);
+        border: none;
+        color: #fff;
+      }
+
+      button.big.primary:hover:not(:disabled) {
+        background-color: var(--green);
+        box-shadow: 0 5px 15px 0 rgba(27, 219, 33, 0.4);
+      }
+
+      button.big.secondary {
+        background-color: #fff;
+        color: var(--blue);
+        border: 1.5px solid var(--blue);
+      }
+
+      button.big.secondary:hover:not(:disabled) {
+        background-color: var(--green-bg-soft);
+        color: var(--green-point);
+        border-color: var(--green-point);
+        box-shadow: 0 5px 15px 0 rgba(27, 219, 33, 0.4);
+      }
+
+      button.big:active:not(:disabled) {
+        transform: translateY(1px);
+      }
+      button.big:focus-visible {
+        outline: 2px solid var(--blue);
+        outline-offset: 2px;
+      }
+
+      .verify {
+        border-radius: 8px;
+        padding: 12px 14px;
+        margin-top: 16px;
+        word-break: break-word;
+        font-size: clamp(13px, 2.6vw, 15px);
+      }
+
+      .verify.ok {
+        color: var(--green-ok);
+        background-color: var(--green-bg);
+        border: 1px solid rgba(27, 219, 33, 0.4);
+      }
+
+      .verify .warn {
+        color: var(--ink-soft);
+        background: #fff8e6;
+        border: 1px solid #f0e0b0;
+        border-radius: 8px;
+        padding: 10px 12px;
+        margin-top: 10px;
+      }
+
+      .verify .warn ul {
+        margin: 6px 0 0;
+        padding-left: 20px;
+      }
+
+      .badge {
+        display: inline-block;
+        margin-left: 8px;
+        padding: 2px 10px;
+        border-radius: 10px;
+        font-size: 12px;
+        font-weight: 600;
+        color: var(--green-ok);
+        background-color: var(--green-bg-soft);
+      }
+    </style>
+  </head>
+
+  <body>
+    <div class="panel">
+      <h1>2 Вопрос. Формальные модели шифров</h1>
+      <p class="subtitle">
+        Основы заложил К. Шеннон; алгебраическая и вероятностная — основные;
+        также симметричная/асимметричная, блочная и автоматная модели
+      </p>
+      <p class="subtitle" style="margin-bottom: 0">
+        Каждая модель — интерактивный рабочий пример: выбирайте карточку и
+        экспериментируйте с параметрами. Модель считается изученной, когда её
+        карточка открыта; сводка внизу заполняется по мере изучения.
+      </p>
+    </div>
+
+    <div class="panel">
+      <h2>Разбор моделей</h2>
+      <div class="steps-strip" id="tabs"></div>
+      <div id="demo"></div>
+      <div class="btn-group">
+        <button class="big secondary" id="btn-reset">⟲ Сброс прогресса</button>
+      </div>
+    </div>
+
+    <div class="panel">
+      <h2>Сводка моделей</h2>
+      <p class="table-empty" id="trace-hint">
+        Строки заполняются по мере изучения моделей.
+      </p>
+      <div class="table-scroll" id="trace-wrap" hidden>
+        <table class="blocks-table">
+          <thead>
+            <tr>
+              <th>№</th>
+              <th>Модель</th>
+              <th class="action-h">Ключевое соотношение</th>
+              <th class="cmt-h">Комментарий</th>
+            </tr>
+          </thead>
+          <tbody id="trace"></tbody>
+        </table>
+      </div>
+
+      <div class="verify ok" id="final" hidden>
+        Итог: модели взаимодополняют друг друга. Алгебраическая фиксирует
+        корректность — <code>D_k(E_k(x)) = x</code> и <code>|Y| ≥ |X|</code>;
+        вероятностная вводит распределения P(X), P(K) и критерий Шеннона —
+        совершенную секретность <code>P(x | y) = P(x)</code>, достижимую лишь
+        при <code>|K| ≥ |X|</code> (шифр Вернама); симметричный и асимметричный
+        шифры различаются устройством ключей и опираются на односторонние
+        функции с секретом и теорию сложности вычислений; блочный шифр —
+        подстановка на V_n, сравниваемая со случайной; автоматная модель
+        описывает поточное преобразование знаков.
+        <span class="badge">Все модели рассмотрены ✔</span>
+        <div class="warn">
+          ⚠ Ограничения моделей:
+          <ul>
+            <li>
+              алгебраическая модель описывает корректность, но не стойкость —
+              знания противника в ней не учитываются;
+            </li>
+            <li>
+              совершенная секретность требует |K| ≥ |X| и однократного
+              использования гаммы — для практических шифров она недостижима,
+              стойкость лишь вычислительная.
+            </li>
+          </ul>
+        </div>
+      </div>
+    </div>
+
+    <script>
+      "use strict";
+      (function () {
+        var $ = function (id) {
+          return document.getElementById(id);
+        };
+
+        function el(tag, cls, html) {
+          var e = document.createElement(tag);
+          if (cls) e.className = cls;
+          if (html != null) e.innerHTML = html;
+          return e;
+        }
+
+        function ctlRow(label, options, active, cb) {
+          var row = el("div", "ctl");
+          row.appendChild(el("span", "lbl", label));
+          var btns = [];
+          options.forEach(function (o, i) {
+            var b = el("button", "chipbtn" + (i === active ? " on" : ""), o);
+            b.addEventListener("click", function () {
+              btns.forEach(function (x, j) {
+                x.classList.toggle("on", j === i);
+              });
+              cb(i);
+            });
+            btns.push(b);
+            row.appendChild(b);
+          });
+          return row;
+        }
+
+        function bars(vals, labels, hotIdx) {
+          var wrap = el("div", "bars");
+          vals.forEach(function (v, i) {
+            var r = el("div", "bar-row" + (i === hotIdx ? " hotbar" : ""));
+            r.appendChild(el("span", "bl", labels[i]));
+            var track = el("div", "bar-track");
+            var b = el("div", "bar");
+            b.style.width = Math.max(1.5, v * 100).toFixed(1) + "%";
+            track.appendChild(b);
+            r.appendChild(track);
+            r.appendChild(el("span", "bv", v.toFixed(3)));
+            wrap.appendChild(r);
+          });
+          return wrap;
+        }
+
+        function powMod(a, e, n) {
+          var r = 1;
+          a %= n;
+          while (e > 0) {
+            if (e & 1) r = (r * a) % n;
+            a = (a * a) % n;
+            e >>= 1;
+          }
+          return r;
+        }
+
+        function b4(x) {
+          return x.toString(2).padStart(4, "0");
+        }
+        function norm4(x) {
+          return ((x % 4) + 4) % 4;
+        }
+
+        var MODELS = [
+          {
+            name: "Алгебраическая",
+            formula: "Σ = (X, K, Y, E, D)",
+            note: "шифр как совокупность множеств и правил",
+            cmt: "описывает корректность, но не стойкость; |Y| ≥ |X|",
+          },
+          {
+            name: "Вероятностная",
+            formula: "P(x | y) = P(x)",
+            note: "распределения P(X), P(K) и апостериорные вероятности",
+            cmt: "совершенная секретность при |K| ≥ |X| (шифр Вернама)",
+            mark: "public",
+          },
+          {
+            name: "Симметричный / асимметричный",
+            formula: "K  либо  (k_e, k_d)",
+            note: "один общий ключ либо пара с открытым k_e",
+            cmt: "k_e открыт; односторонние функции с секретом",
+            mark: "public",
+          },
+          {
+            name: "Блочный шифр",
+            formula: "X = Y = V_n, K = V_m",
+            note: "подстановка на векторах длины n, режимы шифрования",
+            cmt: "эталон качества — случайная подстановка",
+          },
+          {
+            name: "Автоматная",
+            formula: "y_i = f(s_{i−1}, x_i)",
+            note: "преобразование знак за знаком конечным автоматом",
+            cmt: "инъективность f по знаку; гаммирование y_i = x_i ⊕ γ_i",
+            mark: "key-equal",
+          },
+        ];
+
+        var E1 = function (k, x) {
+          return (x + k) % 4;
+        };
+        var D1 = function (k, y) {
+          return norm4(y - k);
+        };
+        var PX = [0.25, 0.25, 0.25, 0.25];
+        var K_UNIFORM = [0.25, 0.25, 0.25, 0.25];
+        var K_BIASED = [0.7, 0.1, 0.1, 0.1];
+
+        function probY(pk) {
+          var py = [0, 0, 0, 0];
+          for (var y = 0; y < 4; y++)
+            for (var x = 0; x < 4; x++) py[y] += PX[x] * pk[norm4(y - x)];
+          return py;
+        }
+
+        function post(pk, y) {
+          var py = probY(pk);
+          var res = [];
+          for (var x = 0; x < 4; x++)
+            res.push((PX[x] * pk[norm4(y - x)]) / py[y]);
+          return res;
+        }
+
+        var E4 = function (k, x) {
+          return (3 * x + k) % 16;
+        };
+        var D4 = function (k, y) {
+          for (var x = 0; x < 16; x++) if (E4(k, x) === y) return x;
+          return -1;
+        };
+
+        function lfsr(s) {
+          var f = ((s & 1) ^ ((s >> 3) & 1)) & 1;
+          return { g: s & 1, s: (s >> 1) | (f << 3) };
+        }
+
+        function demoAlgebraic(box) {
+          box.innerHTML = "";
+          box.appendChild(
+            el(
+              "div",
+              "outline",
+              '<span class="lbl-b">Определение.</span> Шифр — совокупность пяти объектов ' +
+                "Σ = (X, K, Y, E, D), где X — конечное множество открытых текстов; " +
+                "Y — конечное множество криптограмм; K — множество ключей, достаточно большое, " +
+                "чтобы полный перебор был практически неосуществим; E = {E_k : k ∈ K} — семейство " +
+                "правил зашифрования, каждое E_k отображает X в Y; D = {D_k : k ∈ K} — семейство " +
+                "правил расшифрования, отображающих Y обратно в X.<br><br>" +
+                '<span class="lbl-b">Центральное требование</span> — условие однозначного расшифрования: ' +
+                "D_k(E_k(x)) = x для любых k ∈ K и x ∈ X. Из него следует инъективность каждого E_k, " +
+                "а значит |Y| ≥ |X|. Если X = Y, шифр называют эндоморфным: каждое E_k — подстановка " +
+                "множества X, и шифр удобно задавать таблицей зашифрования размера |K| × |X|, в которой " +
+                "каждая строка — перестановка X.<br><br>" +
+                '<span class="lbl-b">Назначение.</span> Модель формализует корректность: расшифрование ' +
+                "всегда восстановит исходный текст, и по криптограмме нельзя назвать несколько кандидатов. " +
+                "Но стойкость она не описывает — знания и возможности противника в ней не учитываются: " +
+                "например, сдвиговый шифр Цезаря с 26 ключами корректен и при этом тривиально вскрывается перебором.",
+            ),
+          );
+
+          box.appendChild(
+            el(
+              "div",
+              "outline",
+              "Учебный шифр: X = Y = {0,1,2,3}, K = {k0,k1,k2,k3}, " +
+                "E_k(x) = (x + k) mod 4, D_k(y) = (y − k) mod 4. " +
+                "Каждая строка таблицы — перестановка X (эндоморфный шифр, X = Y). " +
+                "Выберите текст и ключ — и проверьте условие однозначного расшифрования.",
+            ),
+          );
+
+          var st = { x: 0, k: 1 };
+
+          var tbl = el("table", "blocks-table");
+          tbl.style.minWidth = "0";
+          var thead = el("thead");
+          var hr = el("tr");
+          hr.appendChild(el("th", null, "k \ x"));
+          for (var x = 0; x < 4; x++) hr.appendChild(el("th", null, "x=" + x));
+          thead.appendChild(hr);
+          tbl.appendChild(thead);
+          var tbody = el("tbody");
+          for (var k = 0; k < 4; k++) {
+            var tr = el("tr");
+            tr.appendChild(el("td", "idx", "k" + k));
+            for (var x2 = 0; x2 < 4; x2++) {
+              var td = el("td", null, String(E1(k, x2)));
+              td.dataset.k = k;
+              td.dataset.x = x2;
+              tr.appendChild(td);
+            }
+            tbody.appendChild(tr);
+          }
+          tbl.appendChild(tbody);
+          box.appendChild(tbl);
+
+          var out = el("div", "outline");
+
+          function update() {
+            var y = E1(st.k, st.x);
+            var back = D1(st.k, y);
+            tbody.querySelectorAll("td[data-k]").forEach(function (td) {
+              td.style.background =
+                +td.dataset.k === st.k && +td.dataset.x === st.x
+                  ? "#edfaf0"
+                  : "";
+              td.style.fontWeight = +td.dataset.k === st.k ? 600 : 400;
+            });
+            out.innerHTML =
+              "E<sub>k" +
+              st.k +
+              "</sub>(x = " +
+              st.x +
+              ") = (x + " +
+              st.k +
+              ") mod 4 = y = <b>" +
+              y +
+              "</b>" +
+              " &nbsp;→&nbsp; D<sub>k" +
+              st.k +
+              "</sub>(y) = (y − " +
+              st.k +
+              ") mod 4 = <b>" +
+              back +
+              "</b> = x<br>" +
+              '<span class="ok-line">D<sub>k</sub>(E<sub>k</sub>(x)) = x ✔ — условие однозначного ' +
+              "расшифрования выполняется; отсюда инъективность каждого E<sub>k</sub> и |Y| ≥ |X| " +
+              "(здесь 4 ≥ 4).</span>";
+          }
+
+          box.appendChild(
+            ctlRow(
+              "Открытый текст x =",
+              ["0", "1", "2", "3"],
+              st.x,
+              function (i) {
+                st.x = i;
+                update();
+              },
+            ),
+          );
+          box.appendChild(
+            ctlRow("Ключ k =", ["k0", "k1", "k2", "k3"], st.k, function (i) {
+              st.k = i;
+              update();
+            }),
+          );
+          box.appendChild(out);
+          update();
+        }
+
+        function demoProb(box) {
+          box.innerHTML = "";
+          box.appendChild(
+            el(
+              "div",
+              "outline",
+              '<span class="lbl-b">Определение.</span> Вероятностная модель дополняет алгебраическую ' +
+                "распределениями: Σ_B = (X, K, Y, E, D, P(X), P(K)). Распределение P(X) отражает " +
+                "статистику открытых текстов и априорные сведения противника (его задают, например, " +
+                "моделью независимых испытаний или цепью Маркова); P(K) описывает выбор ключа — обычно " +
+                "равновероятный и независимый от текста. Совместно они порождают распределение на " +
+                "криптограммах P(y) = Σ P(x)·P(k) по всем парам (x, k) с E_k(x) = y — и, по формуле " +
+                "Байеса, апостериорные вероятности P(x | y): то, что противник знает о тексте после перехвата.<br><br>" +
+                '<span class="lbl-b">Критерий Шеннона.</span> Совершенная секретность: P(x | y) = P(x) ' +
+                "для всех x и y — криптограмма не сообщает противнику ничего нового о тексте. " +
+                "Необходимое условие — |K| ≥ |X|; классический пример — шифр Вернама с однократно " +
+                "используемой равновероятной гаммой. В этой же модели вводятся энтропия ключа и " +
+                "расстояние единственности.<br><br>" +
+                '<span class="lbl-b">Назначение.</span> Модель превращает интуитивное «противник ничего ' +
+                "не узнает» в проверяемое равенство и даёт теоретический предел стойкости.",
+            ),
+          );
+
+          box.appendChild(
+            el(
+              "div",
+              "outline",
+              "Тот же шифр: X = {0..3}, E_k(x) = (x+k) mod 4, P(X) равновероятно: P(x) = 0.25. " +
+                "Переключите распределение ключей P(K) и посмотрите, как меняется информированность " +
+                "противника при перехвате криптограммы y.",
+            ),
+          );
+
+          var st = { dist: "uniform", y: 0 };
+
+          box.appendChild(
+            ctlRow(
+              "Распределение ключей P(K):",
+              ["равновероятно (Вернама)", "смещено: P(k0) = 0.7"],
+              0,
+              function (i) {
+                st.dist = i === 0 ? "uniform" : "biased";
+                update();
+              },
+            ),
+          );
+          box.appendChild(
+            ctlRow(
+              "Наблюдаемая криптограмма y =",
+              ["0", "1", "2", "3"],
+              st.y,
+              function (i) {
+                st.y = i;
+                update();
+              },
+            ),
+          );
+
+          var out = el("div");
+          box.appendChild(out);
+
+          function update() {
+            var pk = st.dist === "uniform" ? K_UNIFORM : K_BIASED;
+            out.innerHTML = "";
+
+            out.appendChild(
+              el("div", "demo-title", "Априорные распределения:"),
+            );
+            out.appendChild(bars(PX, ["P(x=0)", "P(x=1)", "P(x=2)", "P(x=3)"]));
+            out.appendChild(
+              el(
+                "div",
+                "demo-title",
+                "Распределения P(K) и порождаемое им P(y):",
+              ),
+            );
+            out.appendChild(bars(pk, ["P(k0)", "P(k1)", "P(k2)", "P(k3)"]));
+            out.appendChild(
+              bars(probY(pk), ["P(y=0)", "P(y=1)", "P(y=2)", "P(y=3)"]),
+            );
+
+            out.appendChild(
+              el(
+                "div",
+                "demo-title",
+                "Апостериорные вероятности P(x | y = " +
+                  st.y +
+                  ") — по формуле Байеса:",
+              ),
+            );
+            var postD = post(pk, st.y);
+            out.appendChild(
+              bars(
+                postD,
+                ["P(x=0|y)", "P(x=1|y)", "P(x=2|y)", "P(x=3|y)"],
+                st.dist === "biased" ? 0 : -1,
+              ),
+            );
+
+            var perfect = pk.every(function (p) {
+              return Math.abs(p - 0.25) < 1e-9;
+            });
+            var verdict = el("div", "outline");
+            if (perfect) {
+              verdict.innerHTML =
+                '<span class="ok-line">P(x | y) = P(x) = 0.25 для всех x и y — совершенная секретность ✔</span><br>' +
+                "Криптограмма не сообщает противнику ничего нового о тексте: наблюдение y не сдвигает " +
+                "его оценки. Необходимое условие |K| ≥ |X| выполнено (4 ≥ 4). Практическая реализация " +
+                "этого случая — шифр Вернама: однократная равновероятная гамма длины текста. " +
+                "Именно так выглядит теоретический предел стойкости, к которому приближаются практические шифры.";
+            } else {
+              var best = postD.indexOf(Math.max.apply(null, postD));
+              verdict.innerHTML =
+                '<span class="warn-line">P(x | y) ≠ P(x) — секретность нарушена ⚠</span><br>' +
+                "При y = " +
+                st.y +
+                " противник повышает оценку текста x = " +
+                best +
+                " с 0.25 до " +
+                postD[best].toFixed(2) +
+                ": криптограмма сообщила ему информацию о тексте. Причина — ключ выбран " +
+                "неравновероятно, и его «перекос» протаивает через распределение P(y). " +
+                "Для восстановления совершенной секретности пришлось бы расширить K до |K| ≥ |X| " +
+                "и выровнять P(K) — то есть вернуться к схеме Вернама.";
+            }
+            out.appendChild(verdict);
+          }
+
+          update();
+        }
+
+        function demoKeys(box) {
+          box.innerHTML = "";
+          box.appendChild(
+            el(
+              "div",
+              "outline",
+              '<span class="lbl-b">Различие моделей — в устройстве ключей.</span> ' +
+                "<b>Симметричный шифр:</b> ключ расшифрования совпадает с ключом зашифрования или легко " +
+                "из него вычисляется, поэтому секретный ключ нужно заранее доставить обеим сторонам по " +
+                "защищённому каналу; к такому шифру непосредственно применима вероятностная модель Σ_B. " +
+                "<b>Асимметричный шифр:</b> ключ — пара (k_e, k_d); ключ зашифрования k_e открыт и " +
+                "публикуется, ключ расшифрования k_d хранится в секрете.<br><br>" +
+                '<span class="lbl-b">Компоненты-требования.</span> Восстановление k_d по k_e и ' +
+                "восстановление x по паре (y, k_e) должны быть вычислительно трудными. В основе — " +
+                "односторонние функции с секретом (например, возведение в степень по составному модулю, " +
+                "где секретом служит разложение модуля), а стойкость оценивается методами теории " +
+                "сложности вычислений — не вероятностями, а трудоёмкостью задач.",
+            ),
+          );
+
+          var st = { mode: "sym", m: 4, busy: false };
+          var wrap = el("div");
+
+          function render() {
+            wrap.innerHTML = "";
+            if (st.mode === "sym") {
+              wrap.appendChild(
+                el(
+                  "div",
+                  "outline",
+                  "<b>Симметричный шифр (пример: AES, ГОСТ).</b> Обе стороны владеют одним ключом K: " +
+                    "ключ расшифрования совпадает с ключом зашифрования или легко из него вычисляется. " +
+                    "К этому шифру применима вероятностная модель Σ_B — распределения P(X), P(K) определены.",
+                ),
+              );
+              wrap.appendChild(
+                el(
+                  "div",
+                  "outline",
+                  "Знают K: A ✔ &nbsp; B ✔ &nbsp; противник ✘ &nbsp;— канал распределения ключа сам " +
+                    "нуждается в защите, и именно отсюда возникает задача, решаемая трёхсторонним " +
+                    "протоколом с доверенным центром.",
+                ),
+              );
+            } else {
+              wrap.appendChild(
+                el(
+                  "div",
+                  "outline",
+                  "<b>Асимметричный шифр (RSA-мини, учебные параметры).</b> Ключ — пара (k<sub>e</sub>, k<sub>d</sub>): " +
+                    "k<sub>e</sub> = (e, n) = (3, 33) — <b>открыт</b>, k<sub>d</sub> = (d, n) = (7, 33) — " +
+                    "<b>секретен</b>. Зашифрование c = m<sup>e</sup> mod n, расшифрование m = c<sup>d</sup> mod n. " +
+                    "Модуль n = 3 · 11 = 33 держится в секрете владеющим k_d — это и есть «секрет» " +
+                    "односторонней функции.",
+                ),
+              );
+
+              var row = el("div", "ctl");
+              row.appendChild(el("span", "lbl", "Сообщение m (0…32):"));
+              var inp = el("input", "inp");
+              inp.value = String(st.m);
+              inp.addEventListener("input", function () {
+                var v = parseInt(inp.value, 10);
+                st.m = isNaN(v) ? 0 : Math.max(0, Math.min(32, v));
+              });
+              row.appendChild(inp);
+              wrap.appendChild(row);
+
+              var out = el("div", "outline", "Нажмите «Зашифровать».");
+              var enc = el("button", "chipbtn", "Зашифровать");
+              enc.addEventListener("click", function () {
+                var c = powMod(st.m, 3, 33);
+                out.innerHTML =
+                  "c = m<sup>e</sup> mod n = " +
+                  st.m +
+                  "<sup>3</sup> mod 33 = <b>" +
+                  c +
+                  "</b> — это делает любой желающий: k_e открыт.";
+              });
+              var dec = el("button", "chipbtn", "Расшифровать");
+              dec.addEventListener("click", function () {
+                var c = powMod(st.m, 3, 33);
+                var m2 = powMod(c, 7, 33);
+                out.innerHTML =
+                  "c = " +
+                  c +
+                  " &nbsp;→&nbsp; m = c<sup>d</sup> mod n = " +
+                  c +
+                  "<sup>7</sup> mod 33 = <b>" +
+                  m2 +
+                  "</b>" +
+                  (m2 === st.m
+                    ? ' <span class="ok-line">✔ восстановлено верно — расшифрование возможно только с k_d</span>'
+                    : "");
+              });
+              wrap.appendChild(enc);
+              wrap.appendChild(dec);
+              wrap.appendChild(out);
+
+              var crack = el("button", "chipbtn", "Восстановить k_d по k_e");
+              var cres = el("div", "outline");
+              crack.addEventListener("click", function () {
+                if (st.busy) return;
+                st.busy = true;
+                crack.disabled = true;
+                cres.textContent = "Вычисляю… (подбираю d по открытому (e, n))";
+                setTimeout(function () {
+                  cres.innerHTML =
+                    '<span class="ok-line">Вычислительно трудно ✔</span> — восстановление k<sub>d</sub> по k<sub>e</sub> ' +
+                    "эквивалентно факторизации n = p·q. При учебных n = 33 это тривиально (3 · 11), " +
+                    "при реальных n ≥ 2048 бит — практически неразрешимо. Так работает модель: " +
+                    "прямое преобразование легко, обратное без секрета — нет; стойкость измеряется " +
+                    "теорией сложности вычислений, а не вероятностями.";
+                  st.busy = false;
+                  crack.disabled = false;
+                }, 900);
+              });
+              wrap.appendChild(crack);
+              wrap.appendChild(cres);
+            }
+          }
+
+          box.appendChild(
+            ctlRow(
+              "Тип шифра:",
+              ["Симметричный", "Асимметричный (RSA-мини)"],
+              0,
+              function (i) {
+                st.mode = i === 0 ? "sym" : "asym";
+                render();
+              },
+            ),
+          );
+          render();
+          box.appendChild(wrap);
+        }
+
+        function demoBlock(box) {
+          box.innerHTML = "";
+          box.appendChild(
+            el(
+              "div",
+              "outline",
+              '<span class="lbl-b">Определение.</span> В блочном шифре X = Y = V_n — множество двоичных ' +
+                "векторов длины n, а K = V_m. Каждый ключ задаёт подстановку E_k на V_n, то есть шифр — " +
+                "подмножество симметрической группы мощности не более 2<sup>m</sup>. Длинное сообщение " +
+                "разбивается на блоки, которые обрабатываются в одном из режимов шифрования: простая " +
+                "замена (ECB), сцепление блоков (CBC) и другие.<br><br>" +
+                '<span class="lbl-b">Назначение.</span> Модель задаёт эталон качества: хороший блочный ' +
+                "шифр должен быть неотличим от случайной подстановки на V_n, иначе статистические " +
+                "различия дадут противнику опору для анализа. Выбрать случайную подстановку напрямую " +
+                "невозможно (её таблица для n = 128 огромна), поэтому практические шифры (AES, ГОСТ " +
+                "«Кузнечик») строят подстановку композиционно — из раундов перестановок и замен.",
+            ),
+          );
+
+          box.appendChild(
+            el(
+              "div",
+              "outline",
+              "Учебный пример: X = Y = V<sub>4</sub> (векторы длины 4, значения 0…15), K = V<sub>2</sub> (4 ключа). " +
+                "Ключ задаёт аффинную биекцию E_k(x) = (3x + k) mod 16. Введите битовую строку — она " +
+                "разрежется на 4-битные блоки, каждый зашифруется одной подстановкой.",
+            ),
+          );
+
+          var st = { key: 0, bits: "110100110111" };
+          var out = el("div");
+
+          function normBits(s) {
+            var v = (s || "").replace(/[^01]/g, "");
+            if (!v) v = "1101";
+            var pad = (4 - (v.length % 4)) % 4;
+            for (var i = 0; i < pad; i++) v += "0";
+            return v.slice(0, 64);
+          }
+
+          function update() {
+            var bits = normBits(st.bits);
+            var padded =
+              bits.length !== (st.bits || "").replace(/[^01]/g, "").length;
+
+            var blocks = [];
+            for (var i = 0; i < bits.length; i += 4)
+              blocks.push(parseInt(bits.slice(i, i + 4), 2));
+
+            var lines = blocks
+              .map(function (bx) {
+                var y = E4(st.key, bx);
+                return b4(bx) + " → E<sub>k</sub> → " + b4(y);
+              })
+              .join(" &nbsp;‖&nbsp; ");
+
+            var back = blocks
+              .map(function (bx) {
+                return b4(D4(st.key, E4(st.key, bx)));
+              })
+              .join("");
+
+            out.innerHTML =
+              (padded
+                ? "Длина дополнена нулями до кратности блоку (4 бита).<br>"
+                : "") +
+              "Зашифрование по блокам: " +
+              lines +
+              "<br>" +
+              "Расшифрование тем же k: " +
+              back +
+              (back === bits
+                ? ' <span class="ok-line">✔ совпадает с исходным сообщением</span>'
+                : "") +
+              "<br><br>" +
+              "Подстановок в шифре: 2<sup>m</sup> = 2<sup>2</sup> = 4. " +
+              "Всего подстановок на V<sub>4</sub>: 16! = 20 922 789 888 000. " +
+              "Доля шифра: ≈ 1,9·10<sup>−13</sup> — до эталона «случайной подстановки» очень далеко; " +
+              "практические блочные шифры берут n = 128, m = 128…256 и приближают случайную подстановку " +
+              "композицией раундов.";
+          }
+
+          var row = el("div", "ctl");
+          row.appendChild(el("span", "lbl", "Сообщение (биты):"));
+          var inp = el("input", "inp");
+          inp.value = st.bits;
+          inp.addEventListener("input", function () {
+            st.bits = inp.value;
+            update();
+          });
+          row.appendChild(inp);
+          box.appendChild(row);
+
+          box.appendChild(
+            ctlRow(
+              "Ключ k (V_2):",
+              ["00", "01", "10", "11"],
+              st.key,
+              function (i) {
+                st.key = i;
+                update();
+              },
+            ),
+          );
+          box.appendChild(out);
+          update();
+        }
+
+        function demoAutomata(box) {
+          box.innerHTML = "";
+          box.appendChild(
+            el(
+              "div",
+              "outline",
+              '<span class="lbl-b">Определение.</span> Автоматная модель описывает шифр, преобразующий ' +
+                "текст знак за знаком, конечным автоматом (I, S, O, h, f): I — входной алфавит, " +
+                "S — множество состояний, O — выходной алфавит, h — функция переходов, f — функция " +
+                "выходов. Начальное состояние s<sub>0</sub> определяется ключом и синхропосылкой; на каждом шаге " +
+                "y<sub>i</sub> = f(s<sub>i−1</sub>, x<sub>i</sub>), s<sub>i</sub> = h(s<sub>i−1</sub>, x<sub>i</sub>).<br><br>" +
+                '<span class="lbl-b">Требование корректности</span> локализовано: однозначное расшифрование ' +
+                "обеспечено, если при каждом фиксированном состоянии функция f инъективна по входному знаку. " +
+                "Важный частный случай — шифр гаммирования: состояние движется независимо от текста, " +
+                "и выход гаммируется со входом: y<sub>i</sub> = x<sub>i</sub> ⊕ γ<sub>i</sub>. " +
+                "Модель естественна для поточных шифров и аппаратных реализаций.",
+            ),
+          );
+
+          box.appendChild(
+            el(
+              "div",
+              "outline",
+              "Учебный автомат: S = V<sub>4</sub>, переходы h — сдвиговый регистр с обратной связью " +
+                "b<sub>0</sub> ⊕ b<sub>3</sub>, выход γ<sub>i</sub> = b<sub>0</sub>(s<sub>i−1</sub>). " +
+                "При ненулевом начальном состоянии период гаммы равен 2<sup>4</sup> − 1 = 15 — все ненулевые " +
+                "состояния проходят по кругу. Гаммирование: y<sub>i</sub> = x<sub>i</sub> ⊕ γ<sub>i</sub>. " +
+                "Смените синхропосылку — при том же «ключе» гамма изменится целиком: так разные сеансы " +
+                "получают разные гаммы без смены ключа.",
+            ),
+          );
+
+          var st = { seed: "1010", bits: "10110100" };
+          var out = el("div");
+
+          function normBits(s, maxLen) {
+            var v = (s || "").replace(/[^01]/g, "");
+            if (!v) v = "1";
+            return v.slice(0, maxLen);
+          }
+
+          function update() {
+            var seed = normBits(st.seed, 4).padEnd(4, "0");
+            var s0 = parseInt(seed, 2);
+            var rawBits = (st.bits || "").replace(/[^01]/g, "");
+            var bits = rawBits || "0";
+
+            var tbl = el("table", "blocks-table");
+            tbl.style.minWidth = "0";
+            var thead = el("thead");
+            var hr = el("tr");
+            [
+              "i",
+              "s<sub>i−1</sub>",
+              "γ<sub>i</sub>",
+              "x<sub>i</sub>",
+              "y<sub>i</sub>",
+              "y<sub>i</sub> ⊕ γ<sub>i</sub>",
+            ].forEach(function (h) {
+              hr.appendChild(el("th", null, h));
+            });
+            thead.appendChild(hr);
+            tbl.appendChild(thead);
+            var tbody = el("tbody");
+            var s = s0;
+            var okAll = true;
+            for (var i = 0; i < bits.length; i++) {
+              var xi = +bits[i];
+              var step = lfsr(s);
+              var y = xi ^ step.g;
+              var back = y ^ step.g;
+              if (back !== xi) okAll = false;
+              var tr = el("tr");
+              [
+                String(i),
+                b4(s),
+                String(step.g),
+                String(xi),
+                String(y),
+                String(back),
+              ].forEach(function (c, ci) {
+                tr.appendChild(el("td", ci === 0 ? "idx" : null, c));
+              });
+              tbody.appendChild(tr);
+              s = step.s;
+            }
+            tbl.appendChild(tbody);
+
+            out.innerHTML = "";
+            out.appendChild(tbl);
+            out.appendChild(
+              el(
+                "div",
+                "outline",
+                (okAll
+                  ? '<span class="ok-line">Расшифрование тем же автоматом с той же синхропосылкой возвращает x<sub>i</sub> ✔ — инъективность f по знаку (сложение по модулю 2) гарантирует однозначность.</span><br>'
+                  : "") +
+                  "Столбец γ<sub>i</sub> меняется независимо от текста — только от состояния: так выглядит " +
+                  "«движение состояния независимо от текста» из модели. Практические требования к такой гамме: " +
+                  "длинный период, статистическая неотличимость от случайной, нелинейность выработки " +
+                  "(чистый LFSR восстанавливается по короткому участку из линейных уравнений) и строгое " +
+                  "однократное использование: повтор γ для двух текстов даёт x ⊕ x′, в котором гамма исчезает, " +
+                  "и оба текста вскрываются частотным анализом.",
+              ),
+            );
+          }
+
+          var r1 = el("div", "ctl");
+          r1.appendChild(el("span", "lbl", "Синхропосылка s0 (4 бита):"));
+          var i1 = el("input", "inp");
+          i1.style.width = "110px";
+          i1.value = st.seed;
+          i1.addEventListener("input", function () {
+            st.seed = i1.value;
+            update();
+          });
+          r1.appendChild(i1);
+          box.appendChild(r1);
+
+          var r2 = el("div", "ctl");
+          r2.appendChild(el("span", "lbl", "Сообщение (биты):"));
+          var i2 = el("input", "inp");
+          i2.value = st.bits;
+          i2.addEventListener("input", function () {
+            st.bits = i2.value;
+            update();
+          });
+          r2.appendChild(i2);
+          box.appendChild(r2);
+
+          box.appendChild(out);
+          update();
+        }
+
+        var demoBox = $("demo");
+        var traceBody = $("trace");
+        var traceWrap = $("trace-wrap");
+        var traceHint = $("trace-hint");
+        var finalBox = $("final");
+        var visited = {};
+        var current = 0;
+
+        var DEMOS = [
+          demoAlgebraic,
+          demoProb,
+          demoKeys,
+          demoBlock,
+          demoAutomata,
+        ];
+
+        function buildTabs() {
+          var strip = $("tabs");
+          strip.innerHTML = "";
+          MODELS.forEach(function (m, i) {
+            var card = el("div", "strip-step");
+            card.innerHTML =
+              '<div class="ss-head"><span class="num">' +
+              (i + 1) +
+              "</span>" +
+              '<span class="route">' +
+              m.formula +
+              "</span>" +
+              '<span class="tick">✔</span></div>' +
+              '<div class="ss-note"><b>' +
+              m.name +
+              "</b> — " +
+              m.note +
+              "</div>";
+            card.addEventListener("click", function () {
+              openModel(i);
+            });
+            strip.appendChild(card);
+          });
+        }
+
+        function openModel(i) {
+          current = i;
+          if (!visited[i]) {
+            visited[i] = true;
+            var m = MODELS[i];
+            var tr = el("tr", m.mark || "");
+            [String(i + 1), m.name, m.formula, m.cmt].forEach(function (c, k) {
+              var td = tr.insertCell();
+              td.textContent = c;
+              td.className = ["idx", "party", "action", "cmt"][k];
+            });
+            traceBody.appendChild(tr);
+            traceWrap.hidden = false;
+            traceHint.hidden = true;
+          }
+          paint();
+        }
+
+        function paint() {
+          document
+            .querySelectorAll("#tabs .strip-step")
+            .forEach(function (c, i) {
+              c.className =
+                "strip-step" +
+                (i === current ? " current" : "") +
+                (visited[i] ? " visited" : "");
+            });
+          DEMOS[current](demoBox);
+          var n = Object.keys(visited).length;
+          if (n === MODELS.length) finalBox.hidden = false;
+        }
+
+        $("btn-reset").addEventListener("click", function () {
+          visited = {};
+          traceBody.innerHTML = "";
+          traceWrap.hidden = true;
+          traceHint.hidden = false;
+          finalBox.hidden = true;
+          current = 0;
+          paint();
+        });
+
+        buildTabs();
+        openModel(0);
+      })();
+    </script>
+  </body>
+</html>
